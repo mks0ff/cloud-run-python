@@ -26,7 +26,13 @@ from typing import List
 from invoke import task
 
 venv = "source ./venv/bin/activate"
+
 GOOGLE_CLOUD_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT")
+
+REPOSITORY = os.environ.get("REPOSITORY", "boom")
+REGION = os.environ.get("REGION", "us-central1")
+REPOSITORY_URL = os.environ.get("REPOSITORY_URL", "{}-docker.pkg.dev".format(REGION))
+DOCKER_IMAGE = os.environ.get("DOCKER_IMAGE", "microservice-template:v1")
 
 
 @task
@@ -41,7 +47,7 @@ def require_project(c):  # noqa: ANN001, ANN201
 def require_venv(c, test_requirements=False, quiet=True):  # noqa: ANN001, ANN201
     """(Check) Require that virtualenv is setup, requirements installed"""
 
-    c.run("python -m venv venv")
+    c.run("python3 -m venv venv")
     quiet_param = " -q" if quiet else ""
 
     with c.prefix(venv):
@@ -67,14 +73,14 @@ def setup_virtualenv(c):  # noqa: ANN001, ANN201
 def start(c):  # noqa: ANN001, ANN201
     """Start the web service"""
     with c.prefix(venv):
-        c.run("python app.py")
+        c.run("python3 app.py")
 
 
 @task(pre=[require_venv])
 def dev(c):  # noqa: ANN001, ANN201
     """Start the web service in a development environment, with fast reload"""
     with c.prefix(venv):
-        c.run("FLASK_ENV=development python app.py")
+        c.run("FLASK_ENV=development python3 app.py")
 
 
 @task(pre=[require_venv])
@@ -119,7 +125,7 @@ def build(c):  # noqa: ANN001, ANN201
     """Build the service into a container image"""
     c.run(
         f"gcloud builds submit --pack "
-        f"image=us-central1-docker.pkg.dev/{GOOGLE_CLOUD_PROJECT}/samples/microservice-template:manual"
+        f"image={REPOSITORY_URL}/{GOOGLE_CLOUD_PROJECT}/{REPOSITORY}/{DOCKER_IMAGE}"
     )
 
 
@@ -128,8 +134,8 @@ def deploy(c):  # noqa: ANN001, ANN201
     """Deploy the container into Cloud Run (fully managed)"""
     c.run(
         "gcloud run deploy microservice-template "
-        f"--image us-central1-docker.pkg.dev/{GOOGLE_CLOUD_PROJECT}/samples/microservice-template:manual "
-        "--platform managed --region us-central1"
+        f"--image {REPOSITORY_URL}/{GOOGLE_CLOUD_PROJECT}/{REPOSITORY}/{DOCKER_IMAGE} "
+        f"--platform managed --region {REGION}"
     )
 
 

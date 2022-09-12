@@ -78,6 +78,7 @@ Invoke will handle establishing local virtual environments, etc. Task definition
     export REPOSITORY="samples"
     export REGION=us-central1
     gcloud artifacts repositories create $REPOSITORY --location $REGION --repository-format "docker"
+    export REPOSITORY_URL=`$REGION-docker.pkg.dev`
     ```
   
 1. Use the gcloud credential helper to authorize Docker to push to your Artifact Registry:

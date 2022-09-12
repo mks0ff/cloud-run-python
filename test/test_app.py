@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from os import environ
+
 import flask
+
+from flask import json
 from flask.testing import FlaskClient
 
 
@@ -24,3 +28,17 @@ def test_get_index(app: flask.app.Flask, client: FlaskClient) -> None:
 def test_post_index(app: flask.app.Flask, client: FlaskClient) -> None:
     res = client.post("/")
     assert res.status_code == 405
+
+
+def test_post_export(app: flask.app.Flask, client: FlaskClient) -> None:
+    # TODO mock bigquery and storage clients
+    res = client.post("/export/covid/covid19_open_data", json={
+        "project" : "boom-1153",
+        "bucket" : "boom-bada-boom-bucket",
+        "location" : "us-central1",
+        "with_header": "false"
+    })
+    data = json.loads(res.data)
+
+    assert res.status_code == 200
+    assert data["status"] == 200
