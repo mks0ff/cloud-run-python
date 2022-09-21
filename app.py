@@ -12,26 +12,68 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# import io
-from datetime import date
 import signal
 import sys
+import traceback
+from datetime import date
 from types import FrameType
 
 from flask import Flask, jsonify, make_response, request
+from google.api_core.exceptions import BadRequest
+from google.cloud.exceptions import NotFound
 
-from utils.bigquery import bq_export, bq_header
-from utils.io import compose_file, list_file
+from utils.bigquery import bq_export, bq_header, get_bigquery_client
+from utils.compose import compose_file, list_file, get_gcs_client
 from utils.logging import logger
 
 app = Flask(__name__)
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
 
 
+@app.errorhandler(NotFound)
+def handle_exception(err):
+    """Handler missing file for composing"""
+    logger.error(f"ValueError: {str(err)}")
+    logger.debug(''.join(traceback.format_exception(type(err), value=err, tb=err.__traceback__)))
+    response = {"error": "URI,Location, or Project is wrong"}
+    return jsonify(response), 404
+
+
+@app.errorhandler(500)
+def handle_exception(err):
+    """Return JSON instead of HTML for any other server error"""
+    logger.error(f"Unknown Exception: {str(err)}")
+    logger.debug(''.join(traceback.format_exception(type(err), value=err, tb=err.__traceback__)))
+    response = {"error": "Sorry, internal error, please check logs"}
+    return jsonify(response), 500
+
+
+@app.errorhandler(ValueError)
+def handle_exception(err):
+    """Handler missing file for composing"""
+    logger.error(f"ValueError: {str(err)}")
+    logger.debug(''.join(traceback.format_exception(type(err), value=err, tb=err.__traceback__)))
+    response = {"error": "file uri not found"}
+    return jsonify(response), 400
+
+
+@app.errorhandler(BadRequest)
+def handle_exception(err):
+    """Handler missing file for composing"""
+    logger.error(f"ValueError: {str(err)}")
+    logger.debug(''.join(traceback.format_exception(type(err), value=err, tb=err.__traceback__)))
+    response = {"error": str(err)}
+    return jsonify(response), 400
+
+
 @app.errorhandler(400)
 @app.route("/export/<dataset_id>/<table_id>", methods=["POST"])
 def export(dataset_id: str, table_id: str) -> str:
-
+    """
+    :param dataset_id:
+    :param table_id:
+    :return:
+    """
     if not request.is_json:
         response = {
             "status": 400,
@@ -39,7 +81,7 @@ def export(dataset_id: str, table_id: str) -> str:
         }
         return make_response(jsonify(response), 400)
 
-    logger.info("Strating export bq:{}/{}".format(dataset_id, table_id))
+    logger.info("Starting export bq:{}/{}".format(dataset_id, table_id))
 
     # config
     project: str = request.json.get("project", "cel-em-prj-dpf-shr-01-dev")
@@ -56,14 +98,17 @@ def export(dataset_id: str, table_id: str) -> str:
     logger.info("Payload : {}".format(request.json))
     logger.info("Filename : {}.csv".format(file_name))
     logger.info("With Header : {}".format(with_header))
+    # Get Cloud Clients
+    storage_client = get_gcs_client()
+    bigquery_client = get_bigquery_client()
 
-    bq_export(project, dataset_id, table_id, location, temp_destination_uri)
-    blobs = list_file(bucket, temp_file_prefix)
-    header = bq_header(project, dataset_id, table_id)
+    bq_export(project, dataset_id, table_id, location, temp_destination_uri, bigquery_client)
+    blobs = list_file(bucket, temp_file_prefix, storage_client)
+    header = bq_header(project, dataset_id, table_id, bigquery_client)
 
-    final_result = compose_file(file_uri, blobs, header)
-    
-    print("final result : {}".format(final_result.path))
+    final_result = compose_file(file_uri, blobs, storage_client, header)
+
+    logger.info("final result : {}".format(final_result.path))
 
     response = {
         "status": 200,
@@ -101,7 +146,7 @@ if __name__ == "__main__":
     # handles Ctrl-C termination
     signal.signal(signal.SIGINT, shutdown_handler)
 
-    app.run(host="localhost", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)
 else:
     # handles Cloud Run container termination
     signal.signal(signal.SIGTERM, shutdown_handler)
