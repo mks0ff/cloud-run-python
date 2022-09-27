@@ -47,7 +47,7 @@ def require_project(c):  # noqa: ANN001, ANN201
 def require_venv(c, test_requirements=False, quiet=True):  # noqa: ANN001, ANN201
     """(Check) Require that virtualenv is setup, requirements installed"""
 
-    c.run("python3 -m venv venv")
+    c.run("python -m venv venv")
     quiet_param = " -q" if quiet else ""
 
     with c.prefix(venv):
@@ -73,14 +73,14 @@ def setup_virtualenv(c):  # noqa: ANN001, ANN201
 def start(c):  # noqa: ANN001, ANN201
     """Start the web service"""
     with c.prefix(venv):
-        c.run("python3 app.py")
+        c.run("python app.py")
 
 
 @task(pre=[require_venv])
 def dev(c):  # noqa: ANN001, ANN201
     """Start the web service in a development environment, with fast reload"""
     with c.prefix(venv):
-        c.run("FLASK_ENV=development python3 app.py")
+        c.run("FLASK_ENV=development python app.py")
 
 
 @task(pre=[require_venv])
