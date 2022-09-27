@@ -85,7 +85,7 @@ def compose_file(file_uri: str, list_object: List[storage.Blob], gcs_client: sto
         logger.info("chunk {} size : {}".format(i, len(chunk)))
         logger.info("Composing csv(s) to one csv...")
         final_blob.compose(chunk, client=gcs_client)
-        delete_objects_concurrent(chunk[1:], executor, client=gcs_client)
+        delete_objects_concurrent(chunk[1:], executor, storage_client=gcs_client)
         sleep(1)
     logger.info("End composing files.")
     # cleanup and exit
@@ -94,7 +94,7 @@ def compose_file(file_uri: str, list_object: List[storage.Blob], gcs_client: sto
 
 
 def delete_objects_concurrent(blobs: List[storage.Blob], executor: concurrent.futures.ThreadPoolExecutor,
-                              gcs_client: storage.Client) -> None:
+                              storage_client: storage.Client) -> None:
     """
     Delete chunks of files asynchronously
     :param blobs:  List of csv files to delete
@@ -104,5 +104,5 @@ def delete_objects_concurrent(blobs: List[storage.Blob], executor: concurrent.fu
     """
     for blob in blobs:
         logger.debug("Deleting slice {}".format(blob.name))
-        executor.submit(blob.delete, client=gcs_client)
+        executor.submit(blob.delete, client=storage_client)
         sleep(.005)
