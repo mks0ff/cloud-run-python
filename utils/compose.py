@@ -21,6 +21,7 @@ def list_file(bucket: str, file_prefix: str, gcs_client: storage.Client) -> List
     """
     :param bucket: Google Cloud Storage Bucket
     :param file_prefix: Prefix
+    :param gcs_client: Google Cloud Storage Client
     :return: List of files in the specific bucket
     """
 
@@ -45,7 +46,7 @@ def write_initial_file_with_header(file_uri: str, header: List, gcs_client: stor
     """
     :param file_uri: the uri of the file
     :param header: headers of the bigquery table if any else empty list
-    :param client: google cloud storage client
+    :param gcs_client: google cloud storage client
     :return: blob file
     """
     try:
@@ -54,10 +55,11 @@ def write_initial_file_with_header(file_uri: str, header: List, gcs_client: stor
             final_blob.upload_from_file(io.BytesIO(b''), client=gcs_client)
         else:
             header_string = f"{','.join(header)} \n"
-            final_blob.upload_from_file(io.StringIO(header_string), content_type='text/csv', client=gcs_client)
+            header_string_io = io.StringIO(header_string)
+            final_blob.upload_from_file(header_string_io, content_type='text/csv', client=gcs_client)
         return final_blob
     except Exception as e:
-        logger.error("Failed to upload blob {}".format(e))
+        logger.error("Failed to upload blob : {}".format(e))
         raise
 
 
@@ -67,6 +69,7 @@ def compose_file(file_uri: str, list_object: List[storage.Blob], gcs_client: sto
     :param file_uri: the path of file
     :param list_object: list containing chunks of files
     :param header: the header of the dataset
+    :param gcs_client: Google Cloud Storage Client
     :return: the composed csv file with the header
     """
     logger.info("Start composing files...")
@@ -99,7 +102,7 @@ def delete_objects_concurrent(blobs: List[storage.Blob], executor: concurrent.fu
     Delete chunks of files asynchronously
     :param blobs:  List of csv files to delete
     :param executor: Multithread Pool Executor
-    :param client: Google Cloud Storage Client
+    :param storage_client: Google Cloud Storage Client
     :return: None
     """
     for blob in blobs:
