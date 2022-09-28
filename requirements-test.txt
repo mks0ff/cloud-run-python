@@ -1,6 +1,6 @@
 pip==22.2.2
 invoke==1.7.1
-
+pytest_cov==3.0.0
 pytest==7.1.2
 black==22.8.0
 flake8==5.0.4
