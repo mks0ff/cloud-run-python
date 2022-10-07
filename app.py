@@ -18,9 +18,10 @@ import traceback
 from datetime import date
 from types import FrameType
 
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, make_response, request, Blueprint
 from google.api_core.exceptions import BadRequest
 from google.cloud.exceptions import NotFound
+from flask_swagger_ui import get_swaggerui_blueprint
 
 from utils.bigquery import bq_export, bq_header, get_bigquery_client
 from utils.compose import compose_file, list_file, get_gcs_client
@@ -28,6 +29,36 @@ from utils.logging import logger
 
 app = Flask(__name__)
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
+REQUEST_API = Blueprint('app', __name__)
+
+"""BOOK_REQUESTS = {
+    {
+        "project": "prject_id",
+        "bucket": "project_bucket",
+        "location": "us",
+        "with_header": "false"
+    }
+}"""
+
+### swagger specific ###
+SWAGGER_URL = '/swagger'
+API_URL = '/static/swagger.yaml'
+SWAGGERUI_BLUEPRINT = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={
+        'app_name': "Cloud Run Python"
+    }
+)
+app.register_blueprint(SWAGGERUI_BLUEPRINT, url_prefix=SWAGGER_URL)
+
+
+### end swagger specific ###
+
+
+def get_blueprint():
+    """Return the blueprint for the main app module"""
+    return REQUEST_API
 
 
 @app.errorhandler(NotFound)

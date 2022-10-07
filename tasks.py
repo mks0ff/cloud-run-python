@@ -144,10 +144,3 @@ def test(c):  # noqa: ANN001, ANN201
     """Run unit tests"""
     with c.prefix(venv):
         c.run("pytest test/test_app.py")
-
-
-@task(pre=[require_venv_test])
-def system_test(c):  # noqa: ANN001, ANN201
-    """Run system tests"""
-    with c.prefix(venv):
-        c.run("pytest test/test_system.py")
