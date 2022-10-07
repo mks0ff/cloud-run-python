@@ -17,7 +17,6 @@ import requests
 
 METADATA_URI = "http://metadata.google.internal/computeMetadata/v1/"
 
-
 def get_project_id() -> str:
     """Use the 'google-auth-library' to make a request to the metadata server or
     default to Application Default Credentials in your local environment."""

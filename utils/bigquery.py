@@ -1,9 +1,11 @@
+import traceback
 from typing import List
 
 from google.api_core.exceptions import BadRequest
 from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 
+from configuration.exceptions import ValidationException
 from utils.logging import logger
 
 
@@ -12,7 +14,7 @@ def get_bigquery_client() -> bigquery.Client:
         return bigquery.Client()
     except Exception as e:
         logger.error("Error creating client: \n\t{}".format(e))
-        raise
+        raise ValidationException("Error creating bigquery client")
 
 
 def bq_export(project: str, dataset_id: str, table_id: str, location: str, destination_uri: str,
@@ -45,11 +47,12 @@ def bq_export(project: str, dataset_id: str, table_id: str, location: str, desti
         logger.info("End BQ table export.")
     except NotFound as e:
         logger.exception(e, exc_info=True)
-        raise
+        raise ValidationException("Dataset not found,please check the input parameters")
 
-    except BadRequest as e:
-        logger.exception(e, exc_info=True)
-        raise
+    except BadRequest as err:
+        logger.error(f"ValueError: {str(err)}")
+        logger.debug(''.join(traceback.format_exception(type(err), value=err, tb=err.__traceback__)))
+        raise ValidationException("Bad Request: Please check the Request Body Params")
 
 
 def bq_header(project: str, dataset_id: str, table_id: str, bq_client: bigquery.Client) -> List[str]:

@@ -11,19 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Generator
 
 import flask
 import pytest
-from flask.testing import FlaskClient
+from fastapi.testclient import TestClient
 
-from app import app as flask_app
-
-
-@pytest.fixture
-def app() -> None:
-    yield flask_app
+from main import app as fastapi_app
 
 
-@pytest.fixture
-def client(app: flask.app.Flask) -> FlaskClient:
-    return app.test_client()
+@pytest.fixture(scope="module")
+def client() -> Generator:
+    with TestClient(fastapi_app) as c:
+        return c

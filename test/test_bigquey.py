@@ -4,6 +4,7 @@ import pytest
 from google.api_core.exceptions import NotFound, BadRequest
 from google.cloud.bigquery import SchemaField
 
+from configuration.exceptions import ValidationException
 from utils.bigquery import bq_export, get_bigquery_client, bq_header
 
 
@@ -52,9 +53,9 @@ def test_export_files_exception(bigquery):
     bigquery_client = bigquery.Client()
     # Assign our mock response as the result of our patched function
     bigquery_client.extract_table.side_effect = NotFound("NotFound")
-    with pytest.raises(NotFound) as exception:
+    with pytest.raises(ValidationException) as exception:
         bq_export(project, dataset_id, table_id, location, temp_destination_uri, bigquery_client)
-    assert exception.value.message == "NotFound"
+    assert exception.value.__str__() == "Dataset not found,please check the input parameters"
 
 
 @patch("utils.bigquery.bigquery")
@@ -68,9 +69,9 @@ def test_export_bad_request_exception(bigquery):
     bigquery_client = bigquery.Client()
     # Assign our mock response as the result of our patched function
     bigquery_client.extract_table.side_effect = BadRequest("BadRequest")
-    with pytest.raises(BadRequest) as exception:
+    with pytest.raises(ValidationException) as exception:
         bq_export(project, dataset_id, table_id, location, temp_destination_uri, bigquery_client)
-    assert exception.value.message == "BadRequest"
+    assert exception.value.__str__() == "Bad Request: Please check the Request Body Params"
 
 
 @patch("utils.bigquery.bigquery")

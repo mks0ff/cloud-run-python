@@ -5,6 +5,7 @@ from typing import List
 
 from google.cloud import storage
 
+from configuration.exceptions import ValidationException
 from utils.logging import logger
 
 
@@ -14,7 +15,7 @@ def get_gcs_client() -> storage.Client:
         return client
     except Exception as e:
         logger.error("Error creating client: \n\t{}".format(e))
-        raise
+        raise ValidationException("Error creating GCS Client")
 
 
 def list_file(bucket: str, file_prefix: str, gcs_client: storage.Client) -> List[storage.Blob]:
@@ -28,7 +29,7 @@ def list_file(bucket: str, file_prefix: str, gcs_client: storage.Client) -> List
     logger.info('Listing files {} ...'.format(bucket))
 
     if file_prefix == "":
-        raise ValueError("File Prefix was not specified")
+        raise ValidationException("File Prefix was not specified")
 
     return [blob for blob in gcs_client.list_blobs(bucket, prefix=file_prefix)]
 
@@ -60,7 +61,7 @@ def write_initial_file_with_header(file_uri: str, header: List, gcs_client: stor
         return final_blob
     except Exception as e:
         logger.error("Failed to upload blob : {}".format(e))
-        raise
+        raise ValidationException("Failed to upload blob to GCS")
 
 
 def compose_file(file_uri: str, list_object: List[storage.Blob], gcs_client: storage.Client,
@@ -75,7 +76,7 @@ def compose_file(file_uri: str, list_object: List[storage.Blob], gcs_client: sto
     logger.info("Start composing files...")
 
     if not list_object:
-        raise ValueError('file not found')
+        raise ValidationException('File not found')
 
     chunks = generate_chunks(list_object=list_object)
     logger.info("Partitioned list of files into {} slices.".format(len(chunks)))

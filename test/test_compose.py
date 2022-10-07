@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from configuration.exceptions import ValidationException
 from utils.compose import get_gcs_client, list_file, generate_chunks, write_initial_file_with_header, \
     delete_objects_concurrent, compose_file
 
@@ -28,7 +29,7 @@ def test_get_files_from_bucket(storage):
 @patch("utils.compose.storage")
 def test_get_files_from_bucket_exception(storage):
     client = storage.Client.return_value
-    with pytest.raises(ValueError) as exception:
+    with pytest.raises(ValidationException) as exception:
         list_file("bucket", "", client)
 
     client.list_blobs.not_assert_called_with('bucket', prefix='prefix')
@@ -87,9 +88,9 @@ def test_write_initial_file__with_header_exception(storage):
     file_uri = "gs://bucket/file.csv"
     header = ['header1', 'header2']
     final_blob = storage.Blob.from_string.return_value
-    with pytest.raises(ValueError) as exception:
+    with pytest.raises(ValidationException) as exception:
         blob = write_initial_file_with_header(file_uri, header, storage_client)
-    assert exception.value.__str__() == "URI scheme must be gs"
+    assert exception.value.__str__() == "Failed to upload blob to GCS"
 
 
 
@@ -124,7 +125,7 @@ def test_compose_file_empty_list(storage):
     list_object = []
     gcs_client = storage.Client.return_value
     header = ["header1", "header2"]
-    with pytest.raises(ValueError) as exception:
+    with pytest.raises(ValidationException) as exception:
         final_blob = compose_file(file_uri, list_object, gcs_client,
                                   header)
-    assert exception.value.__str__() == "file not found"
+    assert exception.value.__str__() == "File not found"

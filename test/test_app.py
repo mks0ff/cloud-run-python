@@ -11,33 +11,33 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 from datetime import date
 from unittest.mock import patch
 
-import flask
-from flask import json
-from flask.testing import FlaskClient
+import fastapi
+from starlette.testclient import TestClient
 
 
-def test_get_index(app: flask.app.Flask, client: FlaskClient) -> None:
+def test_get_index(client: TestClient) -> None:
     res = client.get("/")
     assert res.status_code == 200
 
 
-def test_post_index(app: flask.app.Flask, client: FlaskClient) -> None:
+def test_post_index(client: TestClient) -> None:
     res = client.post("/")
     assert res.status_code == 405
 
 
-@patch("app.compose_file")
-@patch("app.bq_header")
-@patch("app.list_file")
-@patch("app.bq_export")
-@patch("app.get_bigquery_client")
-@patch("app.get_gcs_client")
+@patch("routers.export.compose_file")
+@patch("routers.export.bq_header")
+@patch("routers.export.list_file")
+@patch("routers.export.bq_export")
+@patch("routers.export.get_bigquery_client")
+@patch("routers.export.get_gcs_client")
 def test_post_export(get_gcs_client, get_bigquery_client, bq_export, list_file, bq_header, compose_file,
-                     app: flask.app.Flask,
-                     client: FlaskClient) -> None:
+                     client: TestClient,
+) -> None:
     # initialise json input data
     json_input = {
         "project": "boom-1153",
@@ -65,7 +65,7 @@ def test_post_export(get_gcs_client, get_bigquery_client, bq_export, list_file, 
 
     # Test POST API
     response = client.post(f"/export/{dataset_id}/{table_id}", json=json_input)
-    data = json.loads(response.data)
+    data = response.json()
 
     # Assertions
     get_gcs_client.assert_called_once_with()
@@ -81,11 +81,10 @@ def test_post_export(get_gcs_client, get_bigquery_client, bq_export, list_file, 
     assert data["path"] == file_uri
 
 
-def test_export_is_no_json(client: FlaskClient):
+def test_export_is_no_json(client: TestClient):
     table_id = "table_id"
     dataset_id = "dataset_id"
     response = client.post(f"/export/{dataset_id}/{table_id}")  # Missing Json
-    data = json.loads(response.data)
-    assert response.status_code == 400
-    assert data["status"] == 400
-    assert data["error"] == "Content-Type must be application/json"
+    data = response.json()
+    assert response.status_code == 422
+    assert data['detail'][0]['msg'] == "field required"
