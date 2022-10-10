@@ -1,184 +1,56 @@
-# Cloud Run Template Microservice
+# Déployer et accéder au service Cloud Run authentifié
 
-A template repository for a Cloud Run microservice, written in Python
+ Dans cette documentation, je vais detailler l'accès authentifié à Cloud Run à l'aide d'IAP (Identity-Aware Proxy: [Documentation](https://cloud.google.com/iap/docs). IAP est un service orienté Web GCP qui intercepte les requêtes envoyées à une application pour vérifier l'authentification du navigateur sur la base de cookies. Cela garantit que seuls les utilisateurs authentifiés accèdent à l'application.
+ 
+ Pour mettre en œuvre cette documentation, vous aurez besoin de ces rôles: Cloud Run admin , IAP Secured Web app user, Cloud run invoker, IAP policy admin , IAP settings admin , Compute load balancer admin.
 
-[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run)
+## Etape 1: Creation d'un service Cloud Run
 
-## Prerequisite
+ Cloud Run posséde différents types d'entrée :
 
-* Enable the Cloud Run API via the [console](https://console.cloud.google.com/apis/library/run.googleapis.com?_ga=2.124941642.1555267850.1615248624-203055525.1615245957) or CLI:
+**Internal** : cela autorise les requêtes provenant de l'équilibreur de charge interne, y compris les requêtes provenant de réseaux VPC partagés lorsqu'elles sont acheminées via l'équilibreur de charge HTTP(S) interne.
 
-```bash
-gcloud services enable run.googleapis.com
-```
+Ressources autorisées par tout périmètre VPC Service Controls contenant votre service Cloud Run.
 
-## Features
+Réseaux VPC qui se trouvent dans le même projet ou périmètre VPC Service Controls que votre service Cloud Run.
 
-* **Flask**: Web server framework
-* **Buildpack support** Tooling to build production-ready container images from source code and without a Dockerfile
-* **Dockerfile**: Container build instructions, if needed to replace buildpack for custom build
-* **SIGTERM handler**: Catch termination signal for cleanup before Cloud Run stops the container
-* **Service metadata**: Access service metadata, project ID and region, at runtime
-* **Local development utilities**: Auto-restart with changes and prettify logs
-* **Structured logging w/ Log Correlation** JSON formatted logger, parsable by Cloud Logging, with [automatic correlation of container logs to a request log](https://cloud.google.com/run/docs/logging#correlate-logs).
-* **Unit and System tests**: Basic unit and system tests setup for the microservice
-* **Task definition and execution**: Uses [invoke](http://www.pyinvoke.org/) to execute defined tasks in `tasks.py`.
+Les produits Google Cloud suivants, s'ils se trouvent dans le même projet ou périmètre VPC Service Controls que votre service Cloud Run : Eventarc, Pub/Sub et Workflows.
 
-## Local Development
+**Internal and Cloud Load Balancing** : autorise les requêtes provenant de ressources autorisées par le paramètre interne plus restrictif.
 
-### Cloud Code
+Autorise les requêtes de l'équilibreur de charge HTTP(S) externe.
 
-This template works with [Cloud Code](https://cloud.google.com/code), an IDE extension
-to let you rapidly iterate, debug, and run code on Kubernetes and Cloud Run.
+**All** : les moins restrictifs. Autorise toutes les requêtes, y compris les requêtes provenant directement d'Internet, à accéder à l'URL de l'application.
 
-Learn how to use Cloud Code for:
+## Étape 2 : Créer une adresse IP statique pour l'équilibreur de charge HTTP(S)
 
-* Local development - [VSCode](https://cloud.google.com/code/docs/vscode/developing-a-cloud-run-service), [IntelliJ](https://cloud.google.com/code/docs/intellij/developing-a-cloud-run-service)
+Il est recommandé d'utiliser une adresse IP statique lors de la création d'un équilibreur de charge plutôt que d'utiliser une adresse IP éphémère. L'adresse IP statique attribuée à l'équilibreur de charge ne change pas, fournissant un point d'entrée fixe pour votre équilibreur de charge. Lorsqu'une adresse IP statique est utilisée pour créer un frontal dans l'équilibreur de charge HTTP(S), la même adresse IP peut être réutilisée si le frontal est supprimé ou si l'équilibreur de charge est recréé. Si une adresse IP éphémère est utilisée, nous devrons mettre à jour le registre DNS qui chaque fois que le frontal est supprimé.
 
-* Local debugging - [VSCode](https://cloud.google.com/code/docs/vscode/debugging-a-cloud-run-service), [IntelliJ](https://cloud.google.com/code/docs/intellij/debugging-a-cloud-run-service)
+Pour créer une adresse IP de recherche IP statique dans GCP ou accédez à Réseau VPC et cliquez sur Adresse IP. Cliquez ensuite sur réserver une adresse statique externe.
 
-* Deploying a Cloud Run service - [VSCode](https://cloud.google.com/code/docs/vscode/deploying-a-cloud-run-service), [IntelliJ](https://cloud.google.com/code/docs/intellij/deploying-a-cloud-run-service)
-* Creating a new application from a custom template (`.template/templates.json` allows for use as an app template) - [VSCode](https://cloud.google.com/code/docs/vscode/create-app-from-custom-template), [IntelliJ](https://cloud.google.com/code/docs/intellij/create-app-from-custom-template)
+## Étape 3 : Créer un Load Balancer HTTP(S) Classic
 
-### CLI tooling
+Un Load Balancer est un service qui relève des services réseau. L'utilisation de base d'un équilibreur de charge consiste à répartir le trafic entrant entre différents bakcends (il peut s'agir de serveurs ou de backends sans serveur). GCP, il existe [différents types de Load Balancer](https://medium.com/google-cloud/choosing-the-right-load-balancer-9ec909148a85) fournis par GCP. Dans ce cas d'utilisation, un Load Balancer classic HTTP(S) est utilisé.
 
-To run the `invoke` commands below, install [`invoke`](https://www.pyinvoke.org/index.html) system wide: 
 
-```bash
-pip install invoke
-```
+Nous devrons configurer le front-end, le backend et un hôte et un chemin.
 
-Invoke will handle establishing local virtual environments, etc. Task definitions can be found in `tasks.py`.
+Commençons la configuration du backend de Load Balancer. Dans ce cas d'utilisation, nous avons un servless backend  qui serait une instance Cloud Run.
 
-#### Local development
+En ce qui concerne la configuration frontale, il est conseillé de toujours utiliser le protocole HTTPS, mais pour ce protocole, il y a peu de prérequis.
 
-1. Set Project Id:
-    ```bash
-    export GOOGLE_CLOUD_PROJECT=<GCP_PROJECT_ID>
-    ```
-2. Start the server with hot reload:
-    ```bash
-    invoke dev
-    ```
+Meilleure pratique pour utiliser une adresse IP statique (mise en œuvre à l'étape 2)
+Certificat SSL
+Le certificat SSL peut être téléchargé ou il est également possible d'utiliser des certificats gérés par Google. J'ai utilisé des certificats gérés par Google pour créer un certificat SSL pour mon adresse IP. Il faut environ 10 à 20 minutes pour provisionner un certificat géré par Google.
 
-#### Deploying a Cloud Run service
+## Étape 4 : Configuration de l'écran d'autorisation OAuth
 
-1. Set Project Id:
-    ```bash
-    export GOOGLE_CLOUD_PROJECT=<GCP_PROJECT_ID>
-    ```
+[Documentation](https://developers.google.com/workspace/guides/configure-oauth-consent)
 
-1. Enable the Artifact Registry API:
-    ```bash
-    gcloud services enable artifactregistry.googleapis.com
-    ```
+## Étape 5 : Activer IAP
 
-1. Create an Artifact Registry repo:
-    ```bash
-    export REPOSITORY="samples"
-    export REGION=us-central1
-    gcloud artifacts repositories create $REPOSITORY --location $REGION --repository-format "docker"
-    export REPOSITORY_URL=`$REGION-docker.pkg.dev`
-    ```
-  
-1. Use the gcloud credential helper to authorize Docker to push to your Artifact Registry:
-    ```bash
-    gcloud auth configure-docker
-    ```
+![Workflow IAP](images/IAP.png)
 
-2. Build the container using a buildpack:
-    ```bash
-    invoke build
-    ```
-3. Deploy to Cloud Run:
-    ```bash
-    invoke deploy
-    ```
+Lorsqu'IAP est activé, il crée des informations d'identification dans l'API et les services. Ces informations d'identification ont un URI de redirection. Ainsi, lorsqu'un utilisateur accède au nom de domaine/IP du Load Balancer, le user est redirigé vers une page d'ouverture de connexion, il doit utiliser l'identifiant de GCP et connecter à la page. Une fois cela fait, GCP vérifie si les utilisateurs qui se sont connectés disposent de l'autorisation IAM appropriée pour accéder à cette application particulière. Si l'utilisateur dispose des rôles appropriés, la demande est envoyée à Load Balancer, puis au backend Cloud Run.
 
-### Run sample tests
 
-1. [Pass credentials via `GOOGLE_APPLICATION_CREDENTIALS` env var](https://cloud.google.com/docs/authentication/production#passing_variable):
-    ```bash
-    export GOOGLE_APPLICATION_CREDENTIALS="[PATH]"
-    ```
-
-2. Set Project Id:
-    ```bash
-    export GOOGLE_CLOUD_PROJECT=<GCP_PROJECT_ID>
-    ```
-3. Run unit tests
-    ```bash
-    invoke test
-    ```
-
-4. Run system tests
-    ```bash
-    gcloud builds submit \
-        --config test/advance.cloudbuild.yaml \
-        --substitutions 'COMMIT_SHA=manual,REPO_NAME=manual'
-    ```
-    The Cloud Build configuration file will build and deploy the containerized service
-    to Cloud Run, run tests managed by pytest, then clean up testing resources. This configuration restricts public
-    access to the test service. Therefore, service accounts need to have the permission to issue ID tokens for request authorization:
-    * Enable Cloud Run, Cloud Build, Artifact Registry, and IAM APIs:
-        ```bash
-        gcloud services enable run.googleapis.com cloudbuild.googleapis.com iamcredentials.googleapis.com artifactregistry.googleapis.com
-        ```
-        
-    * Set environment variables.
-        ```bash
-        export PROJECT_ID="$(gcloud config get-value project)"
-        export PROJECT_NUMBER="$(gcloud projects describe $(gcloud config get-value project) --format='value(projectNumber)')"
-        ```
-
-    * Create an Artifact Registry repo (or use another already created repo):
-        ```bash
-        export REPOSITORY="samples"
-        export REGION=us-central1
-        gcloud artifacts repositories create $REPOSITORY --location $REGION --repository-format "docker"
-        ```
-  
-    * Create service account `token-creator` with `Service Account Token Creator` and `Cloud Run Invoker` roles.
-        ```bash
-        gcloud iam service-accounts create token-creator
-
-        gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:token-creator@$PROJECT_ID.iam.gserviceaccount.com" \
-            --role="roles/iam.serviceAccountTokenCreator"
-        gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:token-creator@$PROJECT_ID.iam.gserviceaccount.com" \
-            --role="roles/run.invoker"
-        ```
-
-    * Add `Service Account Token Creator` role to the Cloud Build service account.
-        ```bash
-        gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
-            --role="roles/iam.serviceAccountTokenCreator"
-        ```
-    
-    * Cloud Build also requires permission to deploy Cloud Run services and administer artifacts: 
-
-        ```bash
-        gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
-            --role="roles/run.admin"
-        gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
-            --role="roles/iam.serviceAccountUser"
-        gcloud projects add-iam-policy-binding $PROJECT_ID \
-            --member="serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
-            --role="roles/artifactregistry.repoAdmin"
-        ```
-
-## Maintenance & Support
-
-This repo performs basic periodic testing for maintenance. Please use the issue tracker for bug reports, features requests and submitting pull requests.
-
-## Contributions
-
-Please see the [contributing guidelines](CONTRIBUTING.md)
-
-## License
-
-This library is licensed under Apache 2.0. Full license text is available in [LICENSE](LICENSE).
